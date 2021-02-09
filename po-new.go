@@ -47,6 +47,7 @@ func flattenMap(src map[string]interface{}, path [][]Node, pathIndex int, layerI
 	//fmt.Printf("layerIndex: %v\n", layerIndex)
 	keysDive := make([]string, 0)
 	keysPass := make([]string, 0)
+	keysCombine := make([]string, 0)
 	/* construct keys slice - elements' keys of type slice and map. Other string elements goes into newHeader dict */
 	for k, v := range src {
 		switch sType := reflect.ValueOf(v).Type().Kind(); sType {
@@ -65,6 +66,8 @@ func flattenMap(src map[string]interface{}, path [][]Node, pathIndex int, layerI
 					if k == v.NodeName {
 						if v.ToDive {
 							keysDive = append(keysDive, k)
+						} else if v.ToCombine {
+							keysCombine = append(keysCombine, k)
 						} else {
 							keysPass = append(keysPass, k)
 						}
@@ -74,37 +77,41 @@ func flattenMap(src map[string]interface{}, path [][]Node, pathIndex int, layerI
 		}
 	}
 
-	keys := make([]string, 0)
-	keys = append(keysDive, keysPass...)
-	/* 	fmt.Printf("keysDive: %v\n", keysDive)
-	   	fmt.Printf("keysPass: %v\n", keysPass)
-	   	fmt.Printf("keys: %v, path: %v, pathIndex: %v\n", keys, path, pathIndex) */
+	if pathIndex == len(path) {
+		if !path[pathIndex-1][layerIndex].ToCombine {
+			PrettyPrint(header)
+		}
 
-	if pathIndex < len(path) {
-		/* goes through key in keys (k). Then, for each key in original data, go for each key path[pathIndex] data (v) */
-		for _, k := range keys {
-			//fmt.Printf("go for key: %v\n", k)
-			for i, v := range path[pathIndex] {
-				switch sType := reflect.ValueOf(src[k]).Type().Kind(); sType {
-				case reflect.Slice:
-					if k == v.NodeName {
-						src := reflect.ValueOf(src[k])
-						for i := 0; i < src.Len(); i++ {
-							src := src.Index(i).Interface().(map[string]interface{})
+	} else {
+		keys := make([]string, 0)
+		keys = append(keysDive, keysCombine...)
+		keys = append(keys, keysPass...)
+		/* 	fmt.Printf("keysDive: %v\n", keysDive)
+		fmt.Printf("keysPass: %v\n", keysPass)
+		fmt.Printf("keys: %v, path: %v, pathIndex: %v\n", keys, path, pathIndex) */
+
+		if pathIndex < len(path) {
+			/* goes through key in keys (k). Then, for each key in original data, go for each key path[pathIndex] data (v) */
+			for _, k := range keys {
+				//fmt.Printf("go for key: %v\n", k)
+				for i, v := range path[pathIndex] {
+					switch sType := reflect.ValueOf(src[k]).Type().Kind(); sType {
+					case reflect.Slice:
+						if k == v.NodeName {
+							src := reflect.ValueOf(src[k])
+							for i := 0; i < src.Len(); i++ {
+								src := src.Index(i).Interface().(map[string]interface{})
+								flattenMap(src, path, pathIndex+1, i, header)
+							}
+						}
+					case reflect.Map:
+						if k == v.NodeName {
+							src := src[k].(map[string]interface{})
 							flattenMap(src, path, pathIndex+1, i, header)
 						}
 					}
-				case reflect.Map:
-					if k == v.NodeName {
-						src := src[k].(map[string]interface{})
-						flattenMap(src, path, pathIndex+1, i, header)
-					}
 				}
 			}
-		}
-	} else {
-		if !path[pathIndex-1][layerIndex].ToCombine {
-			PrettyPrint(header) //FIX HERE!!!!!!!
 		}
 	}
 }
