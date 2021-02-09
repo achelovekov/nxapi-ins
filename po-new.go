@@ -104,7 +104,7 @@ func flattenMap(src map[string]interface{}, path [][]Node, pathIndex int, layerI
 		}
 	} else {
 		if !path[pathIndex-1][layerIndex].ToCombine {
-			PrettyPrint(header)
+			PrettyPrint(header) //FIX HERE!!!!!!!
 		}
 	}
 }
