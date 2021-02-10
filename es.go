@@ -1,12 +1,16 @@
 package main
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
 	"reflect"
 
+	"github.com/elastic/go-elasticsearch"
 	es "github.com/elastic/go-elasticsearch"
+	esapi "github.com/elastic/go-elasticsearch/esapi"
 )
 
 type insAPIGeneral struct {
@@ -49,12 +53,24 @@ func PrettyPrint(src map[string]interface{}) {
 	fmt.Printf("Pretty processed output %s\n", string(empJSON))
 }
 
-func esPush(buf []map[string]interface{}) []byte {
+func esConnect(ipaddr string, port string) (*es.Client, error) {
 
-	JSONmetaData, err := json.Marshal(ESmetaData{})
-	if err != nil {
-		log.Println(err)
+	var fulladdress string = "http://" + ipaddr + ":" + port
+
+	cfg := elasticsearch.Config{
+		Addresses: []string{
+			fulladdress,
+		},
 	}
+
+	es, _ := elasticsearch.NewClient(cfg)
+
+	return es, nil
+}
+
+func esPush(esClient *es.Client, indexName string, buf []map[string]interface{}) []byte {
+
+	JSONmetaData := `{"index":{"_index":"` + indexName + `"}}`
 
 	JSONRequestData := make([]byte, 0)
 
@@ -69,6 +85,20 @@ func esPush(buf []map[string]interface{}) []byte {
 		JSONRequestData = append(JSONRequestData, JSONData...)
 		JSONRequestData = append(JSONRequestData, []byte("\n")...)
 	}
+
+	bulkRequest := esapi.BulkRequest{
+		Index: indexName,
+		Body:  bytes.NewBuffer(JSONRequestData),
+	}
+
+	res, err := bulkRequest.Do(context.Background(), esClient)
+
+	if err != nil {
+		log.Fatalf("Error getting response: %s", err)
+	}
+	defer res.Body.Close()
+
+	log.Println(res)
 
 	return JSONRequestData
 }
@@ -198,7 +228,7 @@ func flattenMap(src map[string]interface{}, path [][]Node, pathIndex int, layerI
 	}
 } */
 
-func worker(url string, requestString string, username string, password string, path [][]Node, mode int) {
+func worker(esClient *es.Client, url string, requestString string, username string, password string, path [][]Node, mode int) {
 	/* 	payload := strings.NewReader(requestString)
 
 	   	req, _ := http.NewRequest("POST", url, payload)
@@ -40879,7 +40909,7 @@ func worker(url string, requestString string, username string, password string, 
 
 	flattenMap(body, path, pathIndex, layerIndex, mode, header, &buf)
 
-	fmt.Println(string(esPush(buf)))
+	esPush(esClient, "telemetry-cadence", buf)
 
 	//counter(body, path, pathIndex, layerIndex)
 }
@@ -40890,6 +40920,12 @@ func main() {
 	var payloadString string = "{\n  \"ins_api\": {\n    \"version\": \"1.0\",\n    \"type\": \"cli_show_ascii\",\n    \"chunk\": \"0\",\n    \"sid\": \"sid\",\n    \"input\": \"show consistency-checker membership vlan 2006 detail\",\n    \"output_format\": \"json\"\n  }\n}"
 	var username = "admin"
 	var password = "cisco!123"
+
+	esClient, error := esConnect("10.52.13.120", "10200")
+
+	if error != nil {
+		log.Fatalf("error: %s", error)
+	}
 
 	path := make([][]Node, 13)
 
@@ -40971,5 +41007,5 @@ func main() {
 
 	var mode int = 2
 
-	worker(url, payloadString, username, password, path, mode)
+	worker(esClient, url, payloadString, username, password, path, mode)
 }
