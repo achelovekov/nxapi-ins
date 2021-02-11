@@ -119,7 +119,7 @@ func copySlice(sli []string) []string {
 	return newSli
 }
 
-func flattenMap(src map[string]interface{}, path *Path, pathIndex int, pathPassed []string, mode int, header map[string]interface{}, buf []map[string]interface{}) {
+func flattenMap(src map[string]interface{}, path *Path, pathIndex int, pathPassed []string, mode int, header map[string]interface{}, buf *[]map[string]interface{}) {
 	keysDive := make([]string, 0)
 	keysPass := make([]string, 0)
 	keysCombine := make([]string, 0)
@@ -156,7 +156,7 @@ func flattenMap(src map[string]interface{}, path *Path, pathIndex int, pathPasse
 		for _, v := range (*path)[pathIndex-1].Node {
 			if pathPassed[len(pathPassed)-1] == v.NodeName && !v.ToCombine {
 				//PrettyPrint(header)
-				buf = append(buf, header)
+				*buf = append(*buf, header) //ПРОБЛЕМА ТУТ!!!!!!!!!!БУФЕР ЗАПОЛНЯЕТСЯ ОЧЕНЬ СТРАННО!! должно быть 1 -> 1,2 -> 1,2,3, а получается 1 -> 2,2 -> 3,3,3
 				fmt.Println(buf, "\n")
 			}
 		}
@@ -212,7 +212,7 @@ func worker(esClient *es.Client, path *Path, mode int) {
 	buf := make([]map[string]interface{}, 0)
 	pathPassed := make([]string, 0)
 
-	flattenMap(body, path, pathIndex, pathPassed, mode, header, buf)
+	flattenMap(body, path, pathIndex, pathPassed, mode, header, &buf)
 	/*
 		for _, v := range buf {
 			fmt.Println(v)
