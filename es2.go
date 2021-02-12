@@ -152,12 +152,12 @@ func flattenMap(src map[string]interface{}, path *Path, pathIndex int, pathPasse
 	}
 
 	if pathIndex == len(*path) {
-		fmt.Printf("pathPassed: %v\n", pathPassed)
+		//fmt.Printf("pathPassed: %v\n", pathPassed)
 		for _, v := range (*path)[pathIndex-1].Node {
 			if pathPassed[len(pathPassed)-1] == v.NodeName && !v.ToCombine {
 				//PrettyPrint(header)
 				*buf = append(*buf, header) //ПРОБЛЕМА ТУТ!!!!!!!!!!БУФЕР ЗАПОЛНЯЕТСЯ ОЧЕНЬ СТРАННО!! должно быть 1 -> 1,2 -> 1,2,3, а получается 1 -> 2,2 -> 3,3,3
-				fmt.Println(buf, "\n")
+				//fmt.Println(*buf, "\n")
 			}
 		}
 	} else {
@@ -213,10 +213,10 @@ func worker(esClient *es.Client, path *Path, mode int) {
 	pathPassed := make([]string, 0)
 
 	flattenMap(body, path, pathIndex, pathPassed, mode, header, &buf)
-	/*
-		for _, v := range buf {
-			fmt.Println(v)
-		} */
+
+	for _, v := range buf {
+		fmt.Println(v)
+	}
 	//esPush(esClient, "telemetry-cadence", buf)
 }
 
