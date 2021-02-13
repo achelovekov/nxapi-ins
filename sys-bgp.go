@@ -40879,7 +40879,11 @@ func worker(url string, requestString string, username string, password string, 
 
 	flattenMap(body, path, pathIndex, layerIndex, mode, header, &buf)
 
-	fmt.Println(string(esPush(buf)))
+	//fmt.Println(string(esPush(buf)))
+
+	for _, v := range buf {
+		fmt.Println(v)
+	}
 
 	//counter(body, path, pathIndex, layerIndex)
 }

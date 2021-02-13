@@ -285,7 +285,11 @@ func worker(esClient *es.Client, url string, requestString string, username stri
 
 	flattenMap(body, path, pathIndex, layerIndex, mode, header, &buf)
 
-	esPush(esClient, "telemetry-cadence", buf)
+	for _, v := range buf {
+		fmt.Println(v)
+	}
+
+	//esPush(esClient, "telemetry-cadence", buf)
 
 	//counter(body, path, pathIndex, layerIndex)
 }
@@ -401,13 +405,13 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	fmt.Println(path)
-	fmt.Println(newPath)
+	//fmt.Println(path)
+	//fmt.Println(newPath)
 
-	for il1, vl1 := range *newPath {
+	/* 	for il1, vl1 := range *newPath {
 		fmt.Println(il1, ":", vl1)
 		for _, vl2 := range vl1.Node {
 			fmt.Println(vl2.NodeName, vl2.ToCombine, vl2.ToDive)
 		}
-	}
+	} */
 }

@@ -55,6 +55,13 @@ type ESmetaData struct {
 	} `json:"index"`
 }
 
+type MDTPathDefinitions []struct {
+	MdtPath     string `json:"mdtPath"`
+	MdtPathFile string `json:"mdtPathFile"`
+}
+
+type MDTPaths map[string]Path
+
 func PrettyPrint(src map[string]interface{}) {
 	empJSON, err := json.MarshalIndent(src, "", "  ")
 	if err != nil {
@@ -119,7 +126,15 @@ func copySlice(sli []string) []string {
 	return newSli
 }
 
-func flattenMap(src map[string]interface{}, path *Path, pathIndex int, pathPassed []string, mode int, header map[string]interface{}, buf *[]map[string]interface{}) {
+func copyMap(ma map[string]interface{}) map[string]interface{} {
+	newMap := make(map[string]interface{})
+	for k, v := range ma {
+		newMap[k] = v
+	}
+	return newMap
+}
+
+func flattenMap(src map[string]interface{}, path Path, pathIndex int, pathPassed []string, mode int, header map[string]interface{}, buf *[]map[string]interface{}) {
 	keysDive := make([]string, 0)
 	keysPass := make([]string, 0)
 	keysCombine := make([]string, 0)
@@ -135,8 +150,8 @@ func flattenMap(src map[string]interface{}, path *Path, pathIndex int, pathPasse
 				header[pathPassed[len(pathPassed)-mode]+"."+k] = v.(float64)
 			}
 		default:
-			if pathIndex < len((*path)) {
-				for _, v := range (*path)[pathIndex].Node {
+			if pathIndex < len(path) {
+				for _, v := range path[pathIndex].Node {
 					if k == v.NodeName {
 						if v.ToDive {
 							keysDive = append(keysDive, k)
@@ -151,33 +166,26 @@ func flattenMap(src map[string]interface{}, path *Path, pathIndex int, pathPasse
 		}
 	}
 
-	if pathIndex == len(*path) {
-		//fmt.Printf("pathPassed: %v\n", pathPassed)
-		for _, v := range (*path)[pathIndex-1].Node {
+	if pathIndex == len(path) {
+		for _, v := range path[pathIndex-1].Node {
 			if pathPassed[len(pathPassed)-1] == v.NodeName && !v.ToCombine {
-				//PrettyPrint(header)
-				*buf = append(*buf, header) //ПРОБЛЕМА ТУТ!!!!!!!!!!БУФЕР ЗАПОЛНЯЕТСЯ ОЧЕНЬ СТРАННО!! должно быть 1 -> 1,2 -> 1,2,3, а получается 1 -> 2,2 -> 3,3,3
-				//fmt.Println(*buf, "\n")
+				newHeader := copyMap(header)
+				*buf = append(*buf, newHeader)
 			}
 		}
 	} else {
 		keys := make([]string, 0)
 		keys = append(keysDive, keysCombine...)
 		keys = append(keys, keysPass...)
-		/* 		fmt.Printf("	keysDive: %v\n", keysDive)
-		   		fmt.Printf("	keysPass: %v\n", keysPass)
-		   		fmt.Printf("	keys: %v\n", keys) */
 
-		if pathIndex < len((*path)) {
+		if pathIndex < len(path) {
 			for _, k := range keys {
 				pathPassed = append(pathPassed, k)
 				switch sType := reflect.ValueOf(src[k]).Type().Kind(); sType {
 				case reflect.Map:
-					//fmt.Printf("		go for Map case with key: %v\n", k)
 					src := src[k].(map[string]interface{})
 					flattenMap(src, path, pathIndex+1, pathPassed, mode, header, buf)
 				case reflect.Slice:
-					//fmt.Printf("		go for Slice case with key: %v\n", k)
 					src := reflect.ValueOf(src[k])
 					for i := 0; i < src.Len(); i++ {
 						src := src.Index(i).Interface().(map[string]interface{})
@@ -189,8 +197,7 @@ func flattenMap(src map[string]interface{}, path *Path, pathIndex int, pathPasse
 	}
 }
 
-func worker(esClient *es.Client, path *Path, mode int) {
-
+func worker(esClient *es.Client, path Path, mode int) {
 	body := make(map[string]interface{})
 	jsonFile, err := os.Open("rawJsonSysBgp.json")
 	if err != nil {
@@ -213,11 +220,51 @@ func worker(esClient *es.Client, path *Path, mode int) {
 	pathPassed := make([]string, 0)
 
 	flattenMap(body, path, pathIndex, pathPassed, mode, header, &buf)
+	esPush(esClient, "telemetry-cadence", buf)
+}
 
-	for _, v := range buf {
-		fmt.Println(v)
+func LoadMDTPaths(fileName string) MDTPaths {
+
+	MDTPathDefinitionsFile, err := os.Open(fileName)
+	if err != nil {
+		fmt.Println(err)
 	}
-	//esPush(esClient, "telemetry-cadence", buf)
+	defer MDTPathDefinitionsFile.Close()
+
+	var MDTPathDefinitions MDTPathDefinitions
+	MDTPaths := make(MDTPaths)
+
+	MDTPathDefinitionsFileBytes, err := ioutil.ReadAll(MDTPathDefinitionsFile)
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	err = json.Unmarshal(MDTPathDefinitionsFileBytes, &MDTPathDefinitions)
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	for _, v := range MDTPathDefinitions {
+		var path Path
+
+		pathFile, err := os.Open(v.MdtPathFile)
+		if err != nil {
+			fmt.Println(err)
+		}
+		defer pathFile.Close()
+
+		pathFileBytes, _ := ioutil.ReadAll(pathFile)
+
+		err = json.Unmarshal(pathFileBytes, &path)
+		if err != nil {
+			fmt.Println(err)
+		}
+
+		MDTPaths[v.MdtPath] = path
+
+	}
+
+	return MDTPaths
 }
 
 func main() {
@@ -226,21 +273,11 @@ func main() {
 		log.Fatalf("error: %s", error)
 	}
 
-	jsonPath, err := os.Open("mdtSysBgp.json")
-	if err != nil {
-		fmt.Println(err)
-	}
+	var MDTPaths MDTPaths
 
-	path := new(Path) // returns pointer to concrete data
-	defer jsonPath.Close()
+	MDTPaths = LoadMDTPaths("MDTPaths.json")
 
-	jsonPathBytes, _ := ioutil.ReadAll(jsonPath)
+	var mode int = 2 // mode 2 for cadence
+	worker(esClient, MDTPaths["sys/bgp"], mode)
 
-	err = json.Unmarshal(jsonPathBytes, path)
-	if err != nil {
-		panic(err)
-	}
-
-	var mode int = 2
-	worker(esClient, path, mode)
 }
