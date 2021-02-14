@@ -147,37 +147,4 @@ func main() {
 	var username = "admin"
 	var password = "cisco!123"
 
-	path := make([][]Node, 5)
-
-	node0 := make([]Node, 1)
-	node0_0 := Node{NodeName: "result", ToDive: false}
-	node0[0] = node0_0
-
-	node1 := make([]Node, 1)
-	node1_0 := Node{NodeName: "checkers", ToDive: false}
-	node1[0] = node1_0
-
-	node2 := make([]Node, 2)
-	node2_0 := Node{NodeName: "platformDetails", ToDive: true}
-	node2_1 := Node{NodeName: "passedEntities", ToDive: false}
-	node2[0] = node2_0
-	node2[1] = node2_1
-
-	node3 := make([]Node, 2)
-	node3_0 := Node{NodeName: "key", ToDive: true}
-	node3_1 := Node{NodeName: "value", ToDive: false}
-	node3[0] = node3_0
-	node3[1] = node3_1
-
-	node4 := make([]Node, 1)
-	node4_0 := Node{NodeName: "entityDetails", ToDive: false}
-	node4[0] = node4_0
-
-	path[0] = node0
-	path[1] = node1
-	path[2] = node2
-	path[3] = node3
-	path[4] = node4
-
-	worker(url, payloadString, username, password, path)
 }
