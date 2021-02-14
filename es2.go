@@ -15,6 +15,13 @@ import (
 	esapi "github.com/elastic/go-elasticsearch/esapi"
 )
 
+type Config struct {
+	ESHost       string `json:"ESHost"`
+	ESPort       string `json:"ESPort"`
+	MDTPathsFile string `json:"MDTPathsFile"`
+	ESIndex      string `json:"ESIndex"`
+}
+
 type insAPIGeneral struct {
 	InsAPI struct {
 		Outputs struct {
@@ -197,7 +204,7 @@ func flattenMap(src map[string]interface{}, path Path, pathIndex int, pathPassed
 	}
 }
 
-func worker(esClient *es.Client, path Path, mode int) {
+func worker(esClient *es.Client, indexName string, path Path, mode int) {
 	body := make(map[string]interface{})
 	jsonFile, err := os.Open("rawJsonSysBgp.json")
 	if err != nil {
@@ -220,19 +227,19 @@ func worker(esClient *es.Client, path Path, mode int) {
 	pathPassed := make([]string, 0)
 
 	flattenMap(body, path, pathIndex, pathPassed, mode, header, &buf)
-	esPush(esClient, "telemetry-cadence", buf)
+	esPush(esClient, indexName, buf)
 }
 
 func LoadMDTPaths(fileName string) MDTPaths {
+
+	var MDTPathDefinitions MDTPathDefinitions
+	MDTPaths := make(MDTPaths)
 
 	MDTPathDefinitionsFile, err := os.Open(fileName)
 	if err != nil {
 		fmt.Println(err)
 	}
 	defer MDTPathDefinitionsFile.Close()
-
-	var MDTPathDefinitions MDTPathDefinitions
-	MDTPaths := make(MDTPaths)
 
 	MDTPathDefinitionsFileBytes, err := ioutil.ReadAll(MDTPathDefinitionsFile)
 	if err != nil {
@@ -259,25 +266,35 @@ func LoadMDTPaths(fileName string) MDTPaths {
 		if err != nil {
 			fmt.Println(err)
 		}
-
 		MDTPaths[v.MdtPath] = path
-
 	}
-
 	return MDTPaths
 }
 
 func main() {
-	esClient, error := esConnect("10.52.13.120", "10200")
+
+	var Config Config
+	var MDTPaths MDTPaths
+	var mode int = 2 // mode 2 for cadence
+
+	ConfigFile, err := os.Open("config.json")
+	if err != nil {
+		fmt.Println(err)
+	}
+	defer ConfigFile.Close()
+
+	ConfigFileBytes, _ := ioutil.ReadAll(ConfigFile)
+
+	err = json.Unmarshal(ConfigFileBytes, &Config)
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	esClient, error := esConnect(Config.ESHost, Config.ESPort)
 	if error != nil {
 		log.Fatalf("error: %s", error)
 	}
 
-	var MDTPaths MDTPaths
-
-	MDTPaths = LoadMDTPaths("MDTPaths.json")
-
-	var mode int = 2 // mode 2 for cadence
-	worker(esClient, MDTPaths["sys/bgp"], mode)
-
+	MDTPaths = LoadMDTPaths(Config.MDTPathsFile)
+	worker(esClient, Config.ESIndex, MDTPaths["sys/bgp"], mode)
 }

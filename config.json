@@ -1,0 +1,6 @@
+{
+  "ESHost": "10.52.13.120",
+  "ESPort": "10200",
+  "MDTPathsFile": "MDTPaths.json",
+  "ESIndex": "telemetry-cadence"
+}
